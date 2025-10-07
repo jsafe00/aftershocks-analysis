@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PHIVOLCS Aftershocks Analysis</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <script src="https://cdn.skypack.dev/date-fns"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; }
+    header { background: #2563eb; color: white; padding: 1rem; text-align: center; }
+    #controls { padding: 1rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+    #status { font-size: 0.9rem; color: #444; }
+    #charts { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 1rem; padding: 1rem; }
+    #map { height: 400px; margin: 1rem; border-radius: 8px; }
+    canvas { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: .5rem; }
+    #overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,.7); display:none; justify-content:center; align-items:center; z-index:1000; }
+    #overlay div { border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    #preview { padding: 1rem; font-size: 0.9rem; overflow-x:auto; }
+    #dailyChartContainer { padding: 1rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h2>PHIVOLCS Aftershocks Analysis</h2>
+  </header>
+
+  <div id="controls">
+    <input type="file" id="fileInput" hidden/>
+    <button id="applyBtn" hidden>Apply</button>
+    <label><input type="checkbox" id="cebuOnly" checked hidden></label>
+    <span id="status" hidden>Waiting for file...</span>
+  </div>
+
+  <div id="preview"></div>
+
+  <div id="map"></div>
+
+  <div id="charts">
+    <canvas id="timeline"></canvas>
+    <canvas id="histogram"></canvas>
+    <canvas id="depth"></canvas>
+    <canvas id="cumulative"></canvas>
+  </div>
+
+  <div id="dailyChartContainer">
+    <canvas id="dailyChart"></canvas>
+  </div>
+
+  <div id="overlay">
+    <div></div>
+    <span id="progressText" style="margin-top:10px; font-weight:bold; color:#2563eb;"></span>
+  </div>
+
+  <script type="module">
+    import { parse, format } from "https://cdn.skypack.dev/date-fns";
+
+    const overlay = document.getElementById('overlay');
+    const statusEl = document.getElementById('status');
+    let rawData = [];
+    let map, markers;
+
+    function showOverlay(show) { overlay.style.display = show ? 'flex' : 'none'; }
+
+    function parseExcel(file, callback) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        callback(json);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function filterCebu(data) {
+      return data.filter(r => {
+        const lat = parseFloat(r.Latitude);
+        const lon = parseFloat(r.Longitude);
+        if (isNaN(lat) || isNaN(lon)) return false;
+        return lat >= 10 && lat <= 11.5 && lon >= 123 && lon <= 124.5;
+      });
+    }
+
+  // --- Fetch data and render automatically ---
+  async function loadData() {
+    showOverlay(true);
+    const progressText = document.getElementById('progressText');
+    progressText.textContent = "Loading... 0%";
+
+    let fakePercent = 0;
+    const interval = setInterval(() => {
+      if (fakePercent < 90) { 
+        fakePercent += 5;
+        progressText.textContent = `Loading... ${fakePercent}%`;
+      }
+    }, 200);
+
+ try {
+    const res = await fetch("https://script.google.com/macros/s/AKfycbxBG7ZSXpU6N0AR79hdCmEghzsCdakE9u6omnIhWgMiUsJJ25-_N-7kzWnuHEiTUvwt/exec");
+
+    // Get total size (if server provides Content-Length)
+    const contentLength = res.headers.get("Content-Length");
+    if (!contentLength) {
+      clearInterval(interval); 
+      progressText.textContent = "Loading...";
+      const arr = await res.json();
+      processData(arr);
+      showOverlay(false);
+      return;
+    }
+
+    const total = parseInt(contentLength, 10);
+    let loaded = 0;
+    const reader = res.body.getReader();
+    let chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.length;
+      const percent = Math.round((loaded / total) * 100);
+      progressText.textContent = `Loading... ${percent}%`;
+    }
+
+const merged = new Uint8Array(chunks.reduce((acc, val) => acc + val.length, 0));
+let offset = 0;
+for (let chunk of chunks) {
+  merged.set(chunk, offset);
+  offset += chunk.length;
+}
+const text = new TextDecoder("utf-8").decode(merged);
+const arr = JSON.parse(text);
+
+processData(arr);
+
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = "Failed to load data.";
+    progressText.textContent = "Error loading data.";
+  }
+  setTimeout(() => showOverlay(false), 500);
+}
+
+function processData(arr) {
+  // Convert 2D array into array of objects
+  const headers = arr[0];
+  rawData = arr.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h,i) => obj[h] = row[i]);
+    return obj;
+  });
+
+  let data = document.getElementById('cebuOnly').checked ? filterCebu(rawData) : rawData;
+  statusEl.textContent = `Displaying ${data.length} events`;
+
+  const preview = rawData.slice(0,5);
+  document.getElementById('preview').innerHTML = `<pre>${JSON.stringify(preview,null,2)}</pre>`;
+
+  drawMap(data);
+  drawCharts(data);
+}
+
+    function drawMap(data) {
+      if (!map) {
+        map = L.map('map').setView([10.8, 123.9], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+      }
+      if (markers) markers.clearLayers();
+      markers = L.layerGroup().addTo(map);
+      data.forEach(r => {
+        const lat = parseFloat(r.Latitude);
+        const lon = parseFloat(r.Longitude);
+        const mag = parseFloat(r.Mag);
+        const loc = r.Location || "Unknown";
+        if (!isNaN(lat) && !isNaN(lon)) {
+          L.circleMarker([lat, lon], {
+            radius: 3 + (mag || 0),
+            fillColor: mag >= 4 ? 'red' : 'orange',
+            color: '#000', weight: 0.5, fillOpacity: 0.7
+          }).addTo(markers).bindPopup(`${r["Date - Time"]}<br>Mag ${mag}<br>Location: ${loc}`);
+        }
+      });
+    }
+
+    function drawCharts(data) {
+      const times = [], mags = [], depths = [];
+      data.forEach(r => {
+        try {
+          const t = parse(r["Date - Time"], "dd MMMM yyyy - hh:mm a", new Date());
+          if (!isNaN(t)) {
+            times.push(t);
+            mags.push(parseFloat(r.Mag));
+            depths.push(parseFloat(r.Depth));
+          }
+        } catch(e) { console.warn("Failed to parse date", r["Date - Time"]); }
+      });
+
+      const ctxTimeline = document.getElementById('timeline').getContext('2d');
+      new Chart(ctxTimeline, {
+        type: 'scatter',
+        data: { datasets: [{ label: 'Magnitude vs Time', data: times.map((t,i)=>({x:t,y:mags[i]})), borderColor: 'blue', backgroundColor:'blue' }]},
+        options: { scales: { x: { type:'time'}, y: { beginAtZero:true } } }
+      });
+
+      const ctxHist = document.getElementById('histogram').getContext('2d');
+      new Chart(ctxHist, {
+        type: 'bar',
+        data: { labels: mags.map(m=>m.toFixed(1)), datasets:[{ label:'Magnitude Frequency', data: mags }] },
+        options: { }
+      });
+
+      const ctxDepth = document.getElementById('depth').getContext('2d');
+      new Chart(ctxDepth, {
+        type:'scatter',
+        data:{ datasets:[{ label:'Depth vs Magnitude', data: mags.map((m,i)=>({x:depths[i],y:m})), backgroundColor:'green'}] },
+        options:{ scales:{ x:{ title:{display:true,text:'Depth (km)'}}, y:{ title:{display:true,text:'Magnitude'}} } }
+      });
+
+      const ctxCum = document.getElementById('cumulative').getContext('2d');
+      const sorted = times.slice().sort((a,b)=>a-b);
+      new Chart(ctxCum, {
+        type:'line',
+        data:{ labels: sorted, datasets:[{ label:'Cumulative Aftershocks', data: sorted.map((t,i)=>i+1), borderColor:'purple'}] },
+        options:{ scales:{ x:{ type:'time'} } }
+      });
+
+      // --- New Daily Chart ---
+      const dailyCounts = {};
+      const dailyMags = {};
+      const dailyMaxMag = {};
+      data.forEach(r => {
+        try {
+          const t = parse(r["Date - Time"], "dd MMMM yyyy - hh:mm a", new Date());
+          if (!isNaN(t)) {
+            const day = format(t, "yyyy-MM-dd");
+            if (!dailyCounts[day]) { 
+              dailyCounts[day] = 0; 
+              dailyMags[day] = []; 
+              dailyMaxMag[day] = -Infinity;
+            }
+            dailyCounts[day]++;
+            const mag = parseFloat(r.Mag);
+            dailyMags[day].push(mag);
+            if (mag > dailyMaxMag[day]) dailyMaxMag[day] = mag;
+          }
+        } catch(e) {}
+      });
+
+      const days = Object.keys(dailyCounts).sort();
+      const counts = days.map(d => dailyCounts[d]);
+      const avgMags = days.map(d => dailyMags[d].reduce((a,b)=>a+b,0)/dailyMags[d].length);
+      const maxMags = days.map(d => dailyMaxMag[d]);
+
+      const ctxDaily = document.getElementById('dailyChart').getContext('2d');
+      new Chart(ctxDaily, {
+        data: {
+          labels: days,
+          datasets: [
+            { type:'bar', label:'Aftershock Count', data: counts, backgroundColor:'rgba(37,99,235,0.5)', yAxisID:'y' },
+            { type:'line', label:'Average Magnitude', data: avgMags, borderColor:'red', yAxisID:'y1' },
+            { type:'line', label:'Max Magnitude', data: maxMags, borderColor:'darkorange', borderDash:[5,5], yAxisID:'y1' }
+          ]
+        },
+        options: {
+          scales: {
+            y: { beginAtZero:true, position:'left', title:{ display:true, text:'Count' } },
+            y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Avg Magnitude' } }
+          }
+        }
+      });
+    }
+
+    document.getElementById('applyBtn').onclick = () => {
+      if (!rawData.length) { alert('No data loaded'); return; }
+      showOverlay(true);
+      let data = document.getElementById('cebuOnly').checked ? filterCebu(rawData) : rawData;
+      statusEl.textContent = `Displaying ${data.length} events`;
+      drawMap(data);
+      drawCharts(data);
+      showOverlay(false);
+    };
+
+    document.getElementById('fileInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      showOverlay(true);
+      parseExcel(file, json => {
+        rawData = json;
+        statusEl.textContent = `Loaded ${rawData.length} rows. Click Apply to view.`;
+        const preview = rawData.slice(0,5);
+        document.getElementById('preview').innerHTML = `<pre>${JSON.stringify(preview,null,2)}</pre>`;
+        showOverlay(false);
+      });
+     
+    });
+     window.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>
