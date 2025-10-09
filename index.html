@@ -32,11 +32,11 @@
   <div id="controls">
     <input type="file" id="fileInput" hidden/>
     <button id="applyBtn" hidden>Apply</button>
-    <label><input type="checkbox" id="cebuOnly" checked hidden></label>
+    <label><input type="checkbox" id="cebuOnly" checked> Cebu Region Only</label>
     <span id="status" hidden>Waiting for file...</span>
   </div>
 
-  <div id="preview"></div>
+  <div id="preview" hidden></div>
 
   <div id="map"></div>
 
@@ -62,6 +62,7 @@
     const overlay = document.getElementById('overlay');
     const statusEl = document.getElementById('status');
     let rawData = [];
+    let chartTimeline, chartHist, chartDepth, chartCum, chartDaily;
     let map, markers;
 
     function showOverlay(show) { overlay.style.display = show ? 'flex' : 'none'; }
@@ -203,22 +204,28 @@ function processData(arr) {
         } catch(e) { console.warn("Failed to parse date", r["Date - Time"]); }
       });
 
+      if (chartTimeline) chartTimeline.destroy();
+      if (chartHist) chartHist.destroy();
+      if (chartDepth) chartDepth.destroy();
+      if (chartCum) chartCum.destroy();
+      if (chartDaily) chartDaily.destroy();
+
+      // Recreate charts
       const ctxTimeline = document.getElementById('timeline').getContext('2d');
-      new Chart(ctxTimeline, {
+      chartTimeline = new Chart(ctxTimeline, {
         type: 'scatter',
         data: { datasets: [{ label: 'Magnitude vs Time', data: times.map((t,i)=>({x:t,y:mags[i]})), borderColor: 'blue', backgroundColor:'blue' }]},
         options: { scales: { x: { type:'time'}, y: { beginAtZero:true } } }
       });
 
       const ctxHist = document.getElementById('histogram').getContext('2d');
-      new Chart(ctxHist, {
+      chartHist = new Chart(ctxHist, {
         type: 'bar',
-        data: { labels: mags.map(m=>m.toFixed(1)), datasets:[{ label:'Magnitude Frequency', data: mags }] },
-        options: { }
+        data: { labels: mags.map(m=>m.toFixed(1)), datasets:[{ label:'Magnitude Frequency', data: mags }] }
       });
 
       const ctxDepth = document.getElementById('depth').getContext('2d');
-      new Chart(ctxDepth, {
+      chartDepth = new Chart(ctxDepth, {
         type:'scatter',
         data:{ datasets:[{ label:'Depth vs Magnitude', data: mags.map((m,i)=>({x:depths[i],y:m})), backgroundColor:'green'}] },
         options:{ scales:{ x:{ title:{display:true,text:'Depth (km)'}}, y:{ title:{display:true,text:'Magnitude'}} } }
@@ -226,13 +233,13 @@ function processData(arr) {
 
       const ctxCum = document.getElementById('cumulative').getContext('2d');
       const sorted = times.slice().sort((a,b)=>a-b);
-      new Chart(ctxCum, {
+      chartCum = new Chart(ctxCum, {
         type:'line',
         data:{ labels: sorted, datasets:[{ label:'Cumulative Aftershocks', data: sorted.map((t,i)=>i+1), borderColor:'purple'}] },
         options:{ scales:{ x:{ type:'time'} } }
       });
 
-      // --- New Daily Chart ---
+      // --- Daily Chart ---
       const dailyCounts = {};
       const dailyMags = {};
       const dailyMaxMag = {};
@@ -260,7 +267,7 @@ function processData(arr) {
       const maxMags = days.map(d => dailyMaxMag[d]);
 
       const ctxDaily = document.getElementById('dailyChart').getContext('2d');
-      new Chart(ctxDaily, {
+      chartDaily = new Chart(ctxDaily, {
         data: {
           labels: days,
           datasets: [
@@ -300,6 +307,14 @@ function processData(arr) {
         showOverlay(false);
       });
      
+    });
+
+    document.getElementById('cebuOnly').addEventListener('change', () => {
+      if (!rawData.length) return;
+      let data = document.getElementById('cebuOnly').checked ? filterCebu(rawData) : rawData;
+      statusEl.textContent = `Displaying ${data.length} events`;
+      drawMap(data);
+      drawCharts(data);
     });
      window.addEventListener('DOMContentLoaded', loadData);
   </script>
