@@ -14,7 +14,7 @@
     header { background: #2563eb; color: white; padding: 1rem; text-align: center; }
     #controls { padding: 1rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
     #status { font-size: 0.9rem; color: #444; }
-    #charts { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 1rem; padding: 1rem; }
+    #charts { display: grid; grid-template-columns: 1fr; grid-gap: 1rem; padding: 1rem; }
     #map { height: 400px; margin: 1rem; border-radius: 8px; }
     canvas { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: .5rem; }
     #overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,.7); display:none; justify-content:center; align-items:center; z-index:1000; }
@@ -129,43 +129,43 @@
       progressText.textContent = `Loading... ${percent}%`;
     }
 
-const merged = new Uint8Array(chunks.reduce((acc, val) => acc + val.length, 0));
-let offset = 0;
-for (let chunk of chunks) {
-  merged.set(chunk, offset);
-  offset += chunk.length;
-}
-const text = new TextDecoder("utf-8").decode(merged);
-const arr = JSON.parse(text);
+    const merged = new Uint8Array(chunks.reduce((acc, val) => acc + val.length, 0));
+    let offset = 0;
+    for (let chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    const text = new TextDecoder("utf-8").decode(merged);
+    const arr = JSON.parse(text);
 
-processData(arr);
+    processData(arr);
 
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = "Failed to load data.";
-    progressText.textContent = "Error loading data.";
-  }
-  setTimeout(() => showOverlay(false), 500);
-}
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Failed to load data.";
+        progressText.textContent = "Error loading data.";
+      }
+      setTimeout(() => showOverlay(false), 500);
+    }
 
-function processData(arr) {
-  // Convert 2D array into array of objects
-  const headers = arr[0];
-  rawData = arr.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h,i) => obj[h] = row[i]);
-    return obj;
-  });
+    function processData(arr) {
+      // Convert 2D array into array of objects
+      const headers = arr[0];
+      rawData = arr.slice(1).map(row => {
+        const obj = {};
+        headers.forEach((h,i) => obj[h] = row[i]);
+        return obj;
+      });
 
-  let data = document.getElementById('cebuOnly').checked ? filterCebu(rawData) : rawData;
-  statusEl.textContent = `Displaying ${data.length} events`;
+      let data = document.getElementById('cebuOnly').checked ? filterCebu(rawData) : rawData;
+      statusEl.textContent = `Displaying ${data.length} events`;
 
-  const preview = rawData.slice(0,5);
-  document.getElementById('preview').innerHTML = `<pre>${JSON.stringify(preview,null,2)}</pre>`;
+      const preview = rawData.slice(0,5);
+      document.getElementById('preview').innerHTML = `<pre>${JSON.stringify(preview,null,2)}</pre>`;
 
-  drawMap(data);
-  drawCharts(data);
-}
+      drawMap(data);
+      drawCharts(data);
+    }
 
     function drawMap(data) {
       if (!map) {
