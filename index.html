@@ -96,7 +96,7 @@
 
     let fakePercent = 0;
     const interval = setInterval(() => {
-      if (fakePercent < 90) { 
+      if (fakePercent < 90) {
         fakePercent += 5;
         progressText.textContent = `Loading... ${fakePercent}%`;
       }
@@ -108,7 +108,7 @@
     // Get total size (if server provides Content-Length)
     const contentLength = res.headers.get("Content-Length");
     if (!contentLength) {
-      clearInterval(interval); 
+      clearInterval(interval);
       progressText.textContent = "Loading...";
       const arr = await res.json();
       processData(arr);
@@ -201,29 +201,41 @@ function processData(arr) {
             mags.push(parseFloat(r.Mag));
             depths.push(parseFloat(r.Depth));
           }
-        } catch(e) { console.warn("Failed to parse date", r["Date - Time"]); }
+        } catch(e) {
+          console.warn("Failed to parse date", r["Date - Time"]);
+        }
       });
 
+      // Destroy old charts if they exist
       if (chartTimeline) chartTimeline.destroy();
       if (chartHist) chartHist.destroy();
       if (chartDepth) chartDepth.destroy();
       if (chartCum) chartCum.destroy();
       if (chartDaily) chartDaily.destroy();
 
-      // Recreate charts
+      // Recreate timeline
       const ctxTimeline = document.getElementById('timeline').getContext('2d');
       chartTimeline = new Chart(ctxTimeline, {
         type: 'scatter',
-        data: { datasets: [{ label: 'Magnitude vs Time', data: times.map((t,i)=>({x:t,y:mags[i]})), borderColor: 'blue', backgroundColor:'blue' }]},
-        options: { scales: { x: { type:'time'}, y: { beginAtZero:true } } }
+        data: {
+          datasets: [{
+            label: 'Magnitude vs Time',
+            data: times.map((t,i)=>({x:t,y:mags[i]})),
+            borderColor: 'blue',
+            backgroundColor: 'blue'
+          }]
+        },
+        options: { scales: { x: { type:'time' }, y: { beginAtZero:true } } }
       });
 
+      // Histogram
       const ctxHist = document.getElementById('histogram').getContext('2d');
       chartHist = new Chart(ctxHist, {
         type: 'bar',
-        data: { labels: mags.map(m=>m.toFixed(1)), datasets:[{ label:'Magnitude Frequency', data: mags }] }
+        data: { labels: mags.map(m=>isNaN(m) ? '' : m.toFixed(1)), datasets:[{ label:'Magnitude Frequency', data: mags }] }
       });
 
+      // Depth vs Magnitude
       const ctxDepth = document.getElementById('depth').getContext('2d');
       chartDepth = new Chart(ctxDepth, {
         type:'scatter',
@@ -231,6 +243,7 @@ function processData(arr) {
         options:{ scales:{ x:{ title:{display:true,text:'Depth (km)'}}, y:{ title:{display:true,text:'Magnitude'}} } }
       });
 
+      // Cumulative
       const ctxCum = document.getElementById('cumulative').getContext('2d');
       const sorted = times.slice().sort((a,b)=>a-b);
       chartCum = new Chart(ctxCum, {
@@ -239,32 +252,47 @@ function processData(arr) {
         options:{ scales:{ x:{ type:'time'} } }
       });
 
-      // --- Daily Chart ---
+      // --- Daily Chart with max location ---
       const dailyCounts = {};
       const dailyMags = {};
       const dailyMaxMag = {};
+      const dailyMaxLoc = {}; // <-- store location for the max mag of the day
+
       data.forEach(r => {
         try {
           const t = parse(r["Date - Time"], "dd MMMM yyyy - hh:mm a", new Date());
           if (!isNaN(t)) {
             const day = format(t, "yyyy-MM-dd");
-            if (!dailyCounts[day]) { 
-              dailyCounts[day] = 0; 
-              dailyMags[day] = []; 
+            if (!dailyCounts[day]) {
+              dailyCounts[day] = 0;
+              dailyMags[day] = [];
               dailyMaxMag[day] = -Infinity;
+              dailyMaxLoc[day] = "Unknown";
             }
             dailyCounts[day]++;
             const mag = parseFloat(r.Mag);
-            dailyMags[day].push(mag);
-            if (mag > dailyMaxMag[day]) dailyMaxMag[day] = mag;
+            if (!isNaN(mag)) dailyMags[day].push(mag);
+
+            // get location from common possible fields, fallback to "Unknown"
+            const loc = (r.Location || r.location || r["Location"] || r.Place || r.City || r["Location Name"] || r["LocationName"]) || "Unknown";
+
+            if (!isNaN(mag) && mag > dailyMaxMag[day]) {
+              dailyMaxMag[day] = mag;
+              dailyMaxLoc[day] = loc;
+            }
           }
-        } catch(e) {}
+        } catch(e) {
+          // ignore parse errors
+        }
       });
 
       const days = Object.keys(dailyCounts).sort();
-      const counts = days.map(d => dailyCounts[d]);
-      const avgMags = days.map(d => dailyMags[d].reduce((a,b)=>a+b,0)/dailyMags[d].length);
-      const maxMags = days.map(d => dailyMaxMag[d]);
+      const counts = days.map(d => dailyCounts[d] || 0);
+      const avgMags = days.map(d => {
+        const arr = dailyMags[d] || [];
+        return arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+      });
+      const maxMags = days.map(d => isFinite(dailyMaxMag[d]) ? dailyMaxMag[d] : 0);
 
       const ctxDaily = document.getElementById('dailyChart').getContext('2d');
       chartDaily = new Chart(ctxDaily, {
@@ -277,9 +305,29 @@ function processData(arr) {
           ]
         },
         options: {
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  // Only show location for the Max Magnitude dataset
+                  const datasetLabel = context.dataset && context.dataset.label ? context.dataset.label : '';
+                  const dataIndex = context.dataIndex;
+                  const day = context.chart.data.labels[dataIndex];
+                  const value = context.formattedValue;
+
+                  if (datasetLabel === 'Max Magnitude') {
+                    const loc = dailyMaxLoc[day] || "Unknown";
+                    return `Max Mag: ${value} @ ${loc}`;
+                  }
+                  // default label for other datasets
+                  return `${datasetLabel}: ${value}`;
+                }
+              }
+            }
+          },
           scales: {
             y: { beginAtZero:true, position:'left', title:{ display:true, text:'Count' } },
-            y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Avg Magnitude' } }
+            y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Magnitude' } }
           }
         }
       });
@@ -306,7 +354,7 @@ function processData(arr) {
         document.getElementById('preview').innerHTML = `<pre>${JSON.stringify(preview,null,2)}</pre>`;
         showOverlay(false);
       });
-     
+
     });
 
     document.getElementById('cebuOnly').addEventListener('change', () => {
