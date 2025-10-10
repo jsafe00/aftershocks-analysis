@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>PHIVOLCS Aftershocks Analysis</title>
+  <title>PHIVOLCS Earthquakes and Aftershocks Analysis</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
@@ -26,13 +26,14 @@
 </head>
 <body>
   <header>
-    <h2>PHIVOLCS Aftershocks Analysis</h2>
+    <h2>PHIVOLCS Earthquakes and Aftershocks Analysis</h2>
   </header>
 
   <div id="controls">
     <input type="file" id="fileInput" hidden/>
     <button id="applyBtn" hidden>Apply</button>
-    <label><input type="checkbox" id="cebuOnly" checked> Cebu Region Only</label>
+    <label><input type="checkbox" id="cebuOnly" checked> Cebu Region Only (Sept 30 - 6.9)</label>
+    <label><input type="checkbox" id="davaoOnly"> Davao Region Only (Oct 10 - 7.4)</label>
     <span id="status" hidden>Waiting for file...</span>
   </div>
 
@@ -87,6 +88,42 @@
         return lat >= 10 && lat <= 11.5 && lon >= 123 && lon <= 124.5;
       });
     }
+
+    function filterDavao(data) {
+      return data.filter(r => {
+        const lat = parseFloat(r.Latitude);
+        const lon = parseFloat(r.Longitude);
+        if (isNaN(lat) || isNaN(lon)) return false;
+        return lat >= 5.5 && lat <= 8.5 && lon >= 125 && lon <= 127.5;
+      });
+    }
+
+    function getFilteredData() {
+      const cebuChecked = document.getElementById('cebuOnly').checked;
+      const davaoChecked = document.getElementById('davaoOnly').checked;
+
+      if (cebuChecked && davaoChecked) {
+        // union of Cebu and Davao
+        const cebuData = filterCebu(rawData);
+        const davaoData = filterDavao(rawData);
+        // merge & remove duplicates (by Date-Time + Lat + Lon)
+        const combined = [...cebuData, ...davaoData];
+        const unique = combined.filter((v, i, a) =>
+          a.findIndex(t =>
+            t["Date - Time"] === v["Date - Time"] &&
+            t.Latitude === v.Latitude &&
+            t.Longitude === v.Longitude
+          ) === i
+        );
+        return unique;
+      } else if (cebuChecked) {
+        return filterCebu(rawData);
+      } else if (davaoChecked) {
+        return filterDavao(rawData);
+      }
+      return rawData;
+    }
+
 
   // --- Fetch data and render automatically ---
   async function loadData() {
@@ -157,7 +194,8 @@
         return obj;
       });
 
-      let data = document.getElementById('cebuOnly').checked ? filterCebu(rawData) : rawData;
+      let data = getFilteredData();
+
       statusEl.textContent = `Displaying ${data.length} events`;
 
       const preview = rawData.slice(0,5);
@@ -336,7 +374,8 @@
     document.getElementById('applyBtn').onclick = () => {
       if (!rawData.length) { alert('No data loaded'); return; }
       showOverlay(true);
-      let data = document.getElementById('cebuOnly').checked ? filterCebu(rawData) : rawData;
+      let data = getFilteredData();
+
       statusEl.textContent = `Displaying ${data.length} events`;
       drawMap(data);
       drawCharts(data);
@@ -359,7 +398,17 @@
 
     document.getElementById('cebuOnly').addEventListener('change', () => {
       if (!rawData.length) return;
-      let data = document.getElementById('cebuOnly').checked ? filterCebu(rawData) : rawData;
+      let data = getFilteredData();
+
+      statusEl.textContent = `Displaying ${data.length} events`;
+      drawMap(data);
+      drawCharts(data);
+    });
+
+    document.getElementById('davaoOnly').addEventListener('change', () => {
+      if (!rawData.length) return;
+      let data = getFilteredData();
+
       statusEl.textContent = `Displaying ${data.length} events`;
       drawMap(data);
       drawCharts(data);
