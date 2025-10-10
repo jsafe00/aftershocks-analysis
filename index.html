@@ -52,6 +52,12 @@
     <canvas id="dailyChart"></canvas>
   </div>
 
+  <div id="mainshockComparison" style="padding:1rem;">
+    <h3>Mainshock Comparison: Cebu vs Davao</h3>
+    <canvas id="mainshockDepth"></canvas>
+    <canvas id="mainshockEnergy"></canvas>
+  </div>
+
   <div id="overlay">
     <div></div>
     <span id="progressText" style="margin-top:10px; font-weight:bold; color:#2563eb;"></span>
@@ -203,6 +209,7 @@
 
       drawMap(data);
       drawCharts(data);
+      drawMainshockComparison();
     }
 
     function drawMap(data) {
@@ -367,6 +374,76 @@
             y: { beginAtZero:true, position:'left', title:{ display:true, text:'Count' } },
             y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Magnitude' } }
           }
+        }
+      });
+    }
+
+    function drawMainshockComparison() {
+      function getMainshock(data) {
+        if (!data.length) return null;
+        return data.reduce((max, r) => {
+          const mag = parseFloat(r.Mag);
+          return (!isNaN(mag) && mag > (parseFloat(max.Mag) || 0)) ? r : max;
+        }, data[0]);
+      }
+
+      const cebuMainshock = getMainshock(filterCebu(rawData));
+      const davaoMainshock = getMainshock(filterDavao(rawData));
+
+      if (!cebuMainshock || !davaoMainshock) {
+        console.warn("Mainshocks not found in dataset.");
+        return;
+      }
+
+      const cebuMag = parseFloat(cebuMainshock.Mag) || 0;
+      const cebuDepth = parseFloat(cebuMainshock.Depth) || 0;
+
+      const davaoMag = parseFloat(davaoMainshock.Mag) || 0;
+      const davaoDepth = parseFloat(davaoMainshock.Depth) || 0;
+
+      // --- Magnitude vs Depth Scatter ---
+      new Chart(document.getElementById('mainshockDepth').getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: `Cebu (${cebuMag})`, data: [{x: cebuDepth, y: cebuMag}], backgroundColor: '#2563eb' },
+            { label: `Davao (${davaoMag})`, data: [{x: davaoDepth, y: davaoMag}], backgroundColor: '#f97316' }
+          ]
+        },
+        options: {
+          scales: {
+            x: { title: { display: true, text: 'Depth (km)' } },
+            y: { title: { display: true, text: 'Magnitude' }, beginAtZero: true }
+          },
+          plugins: { title: { display: true, text: 'Magnitude vs Depth (Mainshocks)' } }
+        }
+      });
+
+      // --- Energy Release Comparison ---
+      function energy(mag) {
+        return Math.pow(10, 1.5 * mag + 4.8);
+      }
+
+      const energies = [energy(cebuMag), energy(davaoMag)];
+
+      new Chart(document.getElementById('mainshockEnergy').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: [`Cebu ${cebuMag}`, `Davao ${davaoMag}`],
+          datasets: [{
+            label: 'Energy Release (Joules, log scale)',
+            data: energies,
+            backgroundColor: ['#2563eb', '#f97316']
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              type: 'logarithmic',
+              title: { display: true, text: 'Energy (J)' }
+            }
+          },
+          plugins: { title: { display: true, text: 'Seismic Energy Released (Mainshocks)' } }
         }
       });
     }
