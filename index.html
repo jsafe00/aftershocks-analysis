@@ -35,6 +35,15 @@
     <label><input type="checkbox" id="cebuOnly" checked> Cebu Region Only (Sept 30 - 6.9)</label>
     <label><input type="checkbox" id="davaoOnly"> Davao Region Only (Oct 10 - 7.4)</label>
     <span id="status" hidden>Waiting for file...</span>
+
+    <div id="magnitudeFilters">
+      <label style="font-weight:bold;">Magnitude Filter:</label><br>
+      <label><input type="checkbox" class="magCheckbox" value="4"> 4+</label>
+      <label><input type="checkbox" class="magCheckbox" value="5"> 5+</label>
+      <label><input type="checkbox" class="magCheckbox" value="6"> 6+</label>
+      <label><input type="checkbox" class="magCheckbox" value="7"> 7+</label>
+    </div>
+
   </div>
 
   <div id="preview" hidden></div>
@@ -107,27 +116,40 @@
     function getFilteredData() {
       const cebuChecked = document.getElementById('cebuOnly').checked;
       const davaoChecked = document.getElementById('davaoOnly').checked;
+      const selectedMagnitudes = Array.from(document.querySelectorAll('.magCheckbox:checked'))
+        .map(cb => parseFloat(cb.value));
+
+      let data = [];
 
       if (cebuChecked && davaoChecked) {
-        // union of Cebu and Davao
         const cebuData = filterCebu(rawData);
         const davaoData = filterDavao(rawData);
-        // merge & remove duplicates (by Date-Time + Lat + Lon)
         const combined = [...cebuData, ...davaoData];
-        const unique = combined.filter((v, i, a) =>
+        data = combined.filter((v, i, a) =>
           a.findIndex(t =>
             t["Date - Time"] === v["Date - Time"] &&
             t.Latitude === v.Latitude &&
             t.Longitude === v.Longitude
           ) === i
         );
-        return unique;
       } else if (cebuChecked) {
-        return filterCebu(rawData);
+        data = filterCebu(rawData);
       } else if (davaoChecked) {
-        return filterDavao(rawData);
+        data = filterDavao(rawData);
+      } else {
+        data = rawData;
       }
-      return rawData;
+
+      // 🔍 Magnitude filter
+      if (selectedMagnitudes.length > 0) {
+        data = data.filter(r => {
+          const mag = parseFloat(r.Mag);
+          if (isNaN(mag)) return false;
+          return selectedMagnitudes.some(sel => mag >= sel && mag < sel + 1);
+        });
+      }
+
+      return data;
     }
 
 
@@ -489,6 +511,16 @@
       statusEl.textContent = `Displaying ${data.length} events`;
       drawMap(data);
       drawCharts(data);
+    });
+
+    document.querySelectorAll('.magCheckbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (!rawData.length) return;
+        const data = getFilteredData();
+        statusEl.textContent = `Displaying ${data.length} events`;
+        drawMap(data);
+        drawCharts(data);
+      });
     });
      window.addEventListener('DOMContentLoaded', loadData);
   </script>
