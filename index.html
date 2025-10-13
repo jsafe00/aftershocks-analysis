@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>PHIVOLCS Earthquakes and Aftershocks Analysis</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- External Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
@@ -10,67 +15,78 @@
   <script src="https://cdn.skypack.dev/date-fns"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <style>
-    body { font-family: sans-serif; margin: 0; padding: 0; }
-    header { background: #2563eb; color: white; padding: 1rem; text-align: center; }
-    #controls { padding: 1rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
-    #status { font-size: 0.9rem; color: #444; }
-    #charts { display: grid; grid-template-columns: 1fr; grid-gap: 1rem; padding: 1rem; }
-    #map { height: 400px; margin: 1rem; border-radius: 8px; }
-    canvas { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: .5rem; }
-    #overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,.7); display:none; justify-content:center; align-items:center; z-index:1000; }
-    #overlay div { border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-    #preview { padding: 1rem; font-size: 0.9rem; overflow-x:auto; }
-    #dailyChartContainer { padding: 1rem; }
-  </style>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <header>
-    <h2>PHIVOLCS Earthquakes and Aftershocks Analysis</h2>
+
+<body class="font-sans bg-gray-50 text-gray-800">
+
+  <!-- HEADER -->
+  <header class="header bg-blue-600 text-white p-4 text-center">
+    <h2 class="header__title text-xl font-semibold">
+      PHIVOLCS Earthquakes and Aftershocks Analysis
+    </h2>
   </header>
 
-  <div id="controls">
-    <input type="file" id="fileInput" hidden/>
+  <!-- CONTROLS -->
+  <section class="controls flex flex-wrap gap-4 items-center p-4">
+    <input type="file" id="fileInput" hidden>
     <button id="applyBtn" hidden>Apply</button>
-    <label><input type="checkbox" id="cebuOnly" checked> Cebu Region Only (Sept 30 - 6.9)</label>
-    <label><input type="checkbox" id="davaoOnly"> Davao Region Only (Oct 10 - 7.4)</label>
-    <span id="status" hidden>Waiting for file...</span>
 
-    <div id="magnitudeFilters">
-      <label style="font-weight:bold;">Magnitude Filter:</label><br>
-      <label><input type="checkbox" class="magCheckbox" value="4"> 4+</label>
-      <label><input type="checkbox" class="magCheckbox" value="5"> 5+</label>
-      <label><input type="checkbox" class="magCheckbox" value="6"> 6+</label>
-      <label><input type="checkbox" class="magCheckbox" value="7"> 7+</label>
+    <label class="flex items-center gap-1">
+      <input type="checkbox" id="cebuOnly" checked>
+      <span>Cebu Region Only (Sept 30 - 6.9)</span>
+    </label>
+
+    <label class="flex items-center gap-1">
+      <input type="checkbox" id="davaoOnly">
+      <span>Davao Region Only (Oct 10 - 7.4)</span>
+    </label>
+
+    <span id="status" class="controls__status text-sm text-gray-700 hidden">Waiting for file...</span>
+
+    <div id="magnitudeFilters" class="magnitude-filters">
+      <p class="font-bold mb-1">Magnitude Filter:</p>
+      <div class="flex gap-2 flex-wrap">
+        <label><input type="checkbox" class="magCheckbox" value="4"> 4+</label>
+        <label><input type="checkbox" class="magCheckbox" value="5"> 5+</label>
+        <label><input type="checkbox" class="magCheckbox" value="6"> 6+</label>
+        <label><input type="checkbox" class="magCheckbox" value="7"> 7+</label>
+      </div>
     </div>
+  </section>
 
+  <!-- PREVIEW -->
+  <div id="preview" class="preview p-4 text-sm overflow-x-auto hidden"></div>
+
+  <!-- MAP -->
+  <div id="map" class="map h-[400px] m-4 rounded-lg border border-gray-300"></div>
+
+  <!-- CHARTS -->
+  <section id="charts" class="charts grid grid-cols-1 gap-4 p-4">
+    <canvas id="timeline" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
+    <canvas id="histogram" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
+    <canvas id="depth" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
+    <canvas id="cumulative" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
+  </section>
+
+  <!-- DAILY CHART -->
+  <div id="dailyChartContainer" class="daily-chart-container p-4">
+    <canvas id="dailyChart" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
   </div>
 
-  <div id="preview" hidden></div>
+  <!-- MAINSHOCK COMPARISON -->
+  <section id="mainshockComparison" class="mainshock-comparison p-4">
+    <h3 class="text-lg font-semibold mb-2">Mainshock Comparison: Cebu vs Davao</h3>
+    <canvas id="mainshockDepth" class="chart rounded-lg border border-gray-300 bg-white p-2 mb-4"></canvas>
+    <canvas id="mainshockEnergy" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
+  </section>
 
-  <div id="map"></div>
-
-  <div id="charts">
-    <canvas id="timeline"></canvas>
-    <canvas id="histogram"></canvas>
-    <canvas id="depth"></canvas>
-    <canvas id="cumulative"></canvas>
-  </div>
-
-  <div id="dailyChartContainer">
-    <canvas id="dailyChart"></canvas>
-  </div>
-
-  <div id="mainshockComparison" style="padding:1rem;">
-    <h3>Mainshock Comparison: Cebu vs Davao</h3>
-    <canvas id="mainshockDepth"></canvas>
-    <canvas id="mainshockEnergy"></canvas>
-  </div>
-
-  <div id="overlay">
-    <div></div>
-    <span id="progressText" style="margin-top:10px; font-weight:bold; color:#2563eb;"></span>
+  <!-- OVERLAY -->
+  <div id="overlay" class="overlay fixed inset-0 bg-white/70 hidden justify-center items-center z-50 flex-col">
+    <div class="overlay__spinner"></div>
+    <span id="progressText" class="mt-2 font-bold text-blue-600"></span>
   </div>
 
   <script type="module">

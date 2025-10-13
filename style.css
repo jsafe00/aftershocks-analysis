@@ -1,0 +1,19 @@
+.overlay__spinner {
+  @apply border-4 border-gray-200 border-t-blue-600 rounded-full w-10 h-10 animate-spin;
+}
+
+.leaflet-container {
+  border-radius: 0.5rem;
+}
+
+.chart {
+  @apply bg-white border border-gray-200 rounded-lg p-2 shadow-sm;
+}
+
+.header__title {
+  @apply text-2xl font-semibold;
+}
+
+.controls__status {
+  @apply text-gray-600 text-sm;
+}
