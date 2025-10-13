@@ -5,6 +5,7 @@
   <title>PHIVOLCS Earthquakes and Aftershocks Analysis</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <script src="https://cdn.skypack.dev/date-fns"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
@@ -297,9 +298,51 @@
 
       // Histogram
       const ctxHist = document.getElementById('histogram').getContext('2d');
+
+      // 1️⃣ Filter valid magnitudes
+      const validMags = mags.filter(m => !isNaN(m));
+
+      // 2️⃣ Group into bins (e.g., 4.0–4.9, 5.0–5.9, etc.)
+      const bins = { "4.0–4.9": 0, "5.0–5.9": 0, "6.0–6.9": 0, "7.0–7.9": 0, "8.0+": 0 };
+      validMags.forEach(m => {
+        if (m >= 4 && m < 5) bins["4.0–4.9"]++;
+        else if (m >= 5 && m < 6) bins["5.0–5.9"]++;
+        else if (m >= 6 && m < 7) bins["6.0–6.9"]++;
+        else if (m >= 7 && m < 8) bins["7.0–7.9"]++;
+        else if (m >= 8) bins["8.0+"]++;
+      });
+
       chartHist = new Chart(ctxHist, {
         type: 'bar',
-        data: { labels: mags.map(m=>isNaN(m) ? '' : m.toFixed(1)), datasets:[{ label:'Magnitude Frequency', data: mags }] }
+        data: {
+          labels: Object.keys(bins),
+          datasets: [{
+            label: 'Magnitude Frequency',
+            data: Object.values(bins),
+            backgroundColor: 'rgba(37,99,235,0.5)',
+            borderColor: '#2563eb',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          plugins: {
+            title: {
+              display: true,
+              text: 'Magnitude Frequency (Grouped by Range)'
+            },
+            datalabels: {
+              anchor: 'end',
+              align: 'start',
+              formatter: (val) => val,
+              font: { weight: 'bold' }
+            }
+          },
+          scales: {
+            x: { title: { display: true, text: 'Magnitude Range' } },
+            y: { title: { display: true, text: 'Number of Earthquakes' }, beginAtZero: true }
+          }
+        },
+        plugins: [ChartDataLabels]
       });
 
       // Depth vs Magnitude
