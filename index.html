@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PHIVOLCS Earthquakes and Aftershocks Analysis</title>
 
   <!-- Tailwind CSS -->
@@ -20,17 +21,17 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 
-<body class="font-sans bg-gray-50 text-gray-800">
+<body class="font-sans bg-gray-50 text-gray-800 p-2 sm:p-4">
 
   <!-- HEADER -->
-  <header class="header bg-blue-600 text-white p-4 text-center">
-    <h2 class="header__title text-xl font-semibold">
+  <header class="header bg-blue-600 text-white p-4 text-center rounded-lg shadow">
+    <h2 class="header__title text-lg sm:text-xl font-semibold">
       PHIVOLCS Earthquakes and Aftershocks Analysis
     </h2>
   </header>
 
   <!-- CONTROLS -->
-  <section class="controls flex flex-wrap gap-4 items-center p-4">
+  <section class="controls flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-center p-4 bg-white rounded-lg shadow mt-4">
     <input type="file" id="fileInput" hidden>
     <button id="applyBtn" hidden>Apply</button>
 
@@ -46,7 +47,7 @@
 
     <span id="status" class="controls__status text-sm text-gray-700 hidden">Waiting for file...</span>
 
-    <div id="magnitudeFilters" class="magnitude-filters">
+     <div id="magnitudeFilters" class="magnitude-filters mt-2 sm:mt-0">
       <p class="font-bold mb-1">Magnitude Filter:</p>
       <div class="flex gap-2 flex-wrap">
         <label><input type="checkbox" class="magCheckbox" value="4"> 4+</label>
@@ -58,29 +59,29 @@
   </section>
 
   <!-- PREVIEW -->
-  <div id="preview" class="preview p-4 text-sm overflow-x-auto hidden"></div>
+  <div id="preview" class="preview p-4 text-sm overflow-x-auto hidden bg-white rounded-lg shadow mt-4"></div>
 
   <!-- MAP -->
-  <div id="map" class="map h-[400px] m-4 rounded-lg border border-gray-300"></div>
+  <div id="map" class="map h-[400px] w-full m-4 rounded-lg border border-gray-300 shadow"></div>
 
   <!-- CHARTS -->
-  <section id="charts" class="charts grid grid-cols-1 gap-4 p-4">
-    <canvas id="timeline" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
-    <canvas id="histogram" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
-    <canvas id="depth" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
-    <canvas id="cumulative" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
+  <section id="charts" class="charts flex flex-col gap-4 p-4">
+    <canvas id="timeline" class="chart w-full rounded-lg border border-gray-300 bg-white p-2 shadow"></canvas>
+    <canvas id="histogram" class="chart w-full rounded-lg border border-gray-300 bg-white p-2 shadow"></canvas>
+    <canvas id="depth" class="chart w-full rounded-lg border border-gray-300 bg-white p-2 shadow"></canvas>
+    <canvas id="cumulative" class="chart w-full rounded-lg border border-gray-300 bg-white p-2 shadow"></canvas>
   </section>
 
   <!-- DAILY CHART -->
   <div id="dailyChartContainer" class="daily-chart-container p-4">
-    <canvas id="dailyChart" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
+    <canvas id="dailyChart" class="chart w-full rounded-lg border border-gray-300 bg-white p-2 shadow"></canvas>
   </div>
 
   <!-- MAINSHOCK COMPARISON -->
   <section id="mainshockComparison" class="mainshock-comparison p-4">
-    <h3 class="text-lg font-semibold mb-2">Mainshock Comparison: Cebu vs Davao</h3>
-    <canvas id="mainshockDepth" class="chart rounded-lg border border-gray-300 bg-white p-2 mb-4"></canvas>
-    <canvas id="mainshockEnergy" class="chart rounded-lg border border-gray-300 bg-white p-2"></canvas>
+    <h3 class="text-lg sm:text-xl font-semibold mb-2 text-center">Mainshock Comparison: Cebu vs Davao</h3>
+    <canvas id="mainshockDepth" class="chart w-full rounded-lg border border-gray-300 bg-white p-2 mb-4 shadow"></canvas>
+    <canvas id="mainshockEnergy" class="chart w-full rounded-lg border border-gray-300 bg-white p-2 shadow"></canvas>
   </section>
 
   <!-- OVERLAY -->
