@@ -285,7 +285,7 @@
       const times = [], mags = [], depths = [];
       data.forEach(r => {
         try {
-          const t = parse(r["Date - Time"], "dd MMMM yyyy - hh:mm a", new Date());
+          const t = moment(r["Date - Time"], "DD MMMM YYYY - hh:mm A").toDate();
           if (!isNaN(t)) {
             times.push(t);
             mags.push(parseFloat(r.Mag));
